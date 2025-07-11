@@ -1,0 +1,119 @@
+name: Deploy Lambda
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Número da versão para tag (ex: 0.1)'
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  AWS_ACCESS_KEY_ID:      ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY:  ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_REGION:             ${{ secrets.AWS_REGION }}
+  ECR_REGISTRY:           ${{ secrets.ECR_REGISTRY }}   # ex: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+  LAMBDA_ECR_REPOSITORY:  ${{ secrets.ECR_REPOSITORY }} # ex: lambda-python-ffmpeg
+  LAMBDA_NAME:            ${{ secrets.LAMBDA_NAME }}
+  DEBUG:                  ${{ secrets.DEBUG }}
+  GITHUB_TOKEN:           ${{ secrets.TERRAFORM_GITHUB_TOKEN }}
+  IMAGE_TAG:              ${{ github.event.inputs.version }}
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy to AWS Lambda
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure environment variables file
+        run: |
+          cp .env_example .env
+          sed -i "s|DEBUG=.*|DB_HOST=${{ env.DEBUG }}|" .env
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 📦 ECR Login
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+      - name: 🐳 Build and push Docker image to ECR
+        run: |
+          docker build -t $ECR_REGISTRY/$LAMBDA_ECR_REPOSITORY:$IMAGE_TAG -f Dockerfile .
+          docker push $ECR_REGISTRY/$LAMBDA_ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Deploy container image to Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name $LAMBDA_NAME \
+            --image-uri $ECR_REGISTRY/$LAMBDA_ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Verify Lambda deployment
+        run: |
+          aws lambda get-function --function-name $LAMBDA_NAME
+
+  create-tag:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version input format
+        run: |
+          if ! [[ "$IMAGE_TAG" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            echo "Erro: Formato da Versão deve ser X.Y (apenas números e ponto)."
+            exit 1
+          fi
+
+      - name: Configure Git for tagging
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Determine latest tag
+        id: prev_tag
+        run: |
+            PREVIOUS_TAG=$(git describe --tags --abbrev=0)
+            echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+
+      - name: Gather changelog entries
+        id: changelog
+        run: |
+            RANGE=${{ steps.prev_tag.outputs.previous_tag }}..HEAD
+            echo "Commit range: $RANGE"
+            COMMITS=$(git log $RANGE --pretty=format:"- %s")
+            echo "commits<<EOF" >> $GITHUB_OUTPUT
+            echo "$COMMITS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create and push Git tag
+        env:
+          TAG: v${{ env.IMAGE_TAG }}
+        run: |
+          git tag -a $TAG -m "Release $TAG"
+          git push origin $TAG
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ env.IMAGE_TAG }}
+          release_name: Release v${{ env.IMAGE_TAG }}
+          body: |
+            ## Changelog
+            ${{ steps.changelog.outputs.commits }}
