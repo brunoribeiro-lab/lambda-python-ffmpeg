@@ -12,16 +12,14 @@ on:
           - apply
           - destroy
 
-# --- Declaração global, adicione as secrets ao seu repositório ---
 env:
   AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION:            ${{ secrets.AWS_REGION }}
-  GITHUB_TOKEN:          ${{ secrets.TERRAFORM_GITHUB_TOKEN }}
 
 jobs:
-  setup:
-    name: Setup Environment
+  terraform:
+    name: Terraform
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -39,11 +37,6 @@ jobs:
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-  plan:
-    name: Terraform Plan
-    runs-on: ubuntu-latest
-    needs: setup
-    steps:
       - name: Terraform Init
         working-directory: terraform
         run: terraform init -input=false
@@ -57,27 +50,11 @@ jobs:
         working-directory: terraform
         run: terraform plan -out=tfplan -input=false
 
-  prepare:
-    name: Prepare for Apply
-    if: ${{ github.event.inputs.action == 'apply' }}
-    runs-on: ubuntu-latest
-    needs: plan
-    steps:
-      - name: Clone & Zip Lambdas
-        run: bash terraform/scripts/prepare.sh
-
-  deploy:
-    name: Apply or Destroy
-    runs-on: ubuntu-latest
-    needs:
-      - plan
-      - prepare
-    steps:
       - name: Terraform Apply or Destroy
         working-directory: terraform
         run: |
           if [ "${{ github.event.inputs.action }}" == "apply" ]; then
-            terraform apply -auto-approve tfplan -var="github_token=${{ env.GITHUB_TOKEN }}"
+            terraform apply -input=false -auto-approve tfplan
           else
-            terraform destroy -auto-approve -var="github_token=${{ env.GITHUB_TOKEN }}"
+            terraform destroy -auto-approve
           fi
