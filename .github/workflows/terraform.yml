@@ -16,6 +16,7 @@ env:
   AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION:            ${{ secrets.AWS_REGION }}
+  PROJECT_NAME:          ${{ secrets.PROJECT_NAME }}
 
 jobs:
   terraform:
@@ -49,6 +50,20 @@ jobs:
         id: plan
         working-directory: terraform
         run: terraform plan -out=tfplan -input=false
+
+      - name: Empty ECR repository and S3 bucket before destroy
+        if: ${{ github.event.inputs.action == 'destroy' }}
+        run: |
+          # Remove all images from ECR
+          aws ecr list-images --repository-name $PROJECT_NAME --region $AWS_REGION \
+            --query 'imageIds[*]' --output json | \
+            jq -c '.[]' | \
+            while read image; do
+              aws ecr batch-delete-image --repository-name $PROJECT_NAME --region $AWS_REGION --image-ids "$image"
+            done
+
+          # Remove all videos from S3 bucket
+          aws s3 rm s3://$PROJECT_NAME --region $AWS_REGION --recursive
 
       - name: Terraform Apply or Destroy
         working-directory: terraform
