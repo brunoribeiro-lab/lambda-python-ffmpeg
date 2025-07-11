@@ -60,6 +60,7 @@ resource "null_resource" "prepare_image" {
 }
 
 resource "aws_lambda_function" "this" {
+  depends_on    = [null_resource.prepare_image]
   function_name = var.project_name
   role          = aws_iam_role.lambda_role.arn
   package_type  = "Image"
