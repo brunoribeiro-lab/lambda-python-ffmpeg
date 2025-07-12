@@ -18,6 +18,7 @@ env:
   ECR_REGISTRY:           ${{ secrets.ECR_REGISTRY }}   # ex: 123456789012.dkr.ecr.us-east-1.amazonaws.com
   LAMBDA_ECR_REPOSITORY:  ${{ secrets.ECR_REPOSITORY }} # ex: lambda-python-ffmpeg
   LAMBDA_NAME:            ${{ secrets.LAMBDA_NAME }}
+  BUCKET_NAME:            ${{ secrets.S3_NAME }}
   DEBUG:                  ${{ secrets.DEBUG }}
   GITHUB_TOKEN:           ${{ secrets.TERRAFORM_GITHUB_TOKEN }}
   IMAGE_TAG:              ${{ github.event.inputs.version }}
@@ -33,8 +34,12 @@ jobs:
 
       - name: Configure environment variables file
         run: |
-          cp .env_example .env
+          cp .env-example .env
           sed -i "s|DEBUG=.*|DB_HOST=${{ env.DEBUG }}|" .env
+          sed -i "s|AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=${{ env.AWS_ACCESS_KEY_ID }}|" .env
+          sed -i "s|AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=${{ env.AWS_SECRET_ACCESS_KEY }}|" .env
+          sed -i "s|AWS_REGION=.*|AWS_REGION=${{ env.AWS_REGION }}|" .env
+          sed -i "s|BUCKET=.*|BUCKET=${{ env.BUCKET_NAME }}|" .env
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
