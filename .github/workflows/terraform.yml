@@ -54,21 +54,26 @@ jobs:
       - name: Empty ECR repository and S3 bucket before destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
         run: |
-          # Remove all images from ECR
-          aws ecr list-images --repository-name $PROJECT_NAME --region $AWS_REGION \
-            --query 'imageIds[*]' --output json | \
-            jq -c '.[]' | \
-            while read image; do
-              aws ecr batch-delete-image --repository-name $PROJECT_NAME --region $AWS_REGION --image-ids "$image"
-            done
+          if aws ecr describe-repositories --repository-names "$PROJECT_NAME" --region "$AWS_REGION" > /dev/null 2>&1; then
+            echo "▶️ Limpando imagens do ECR: $PROJECT_NAME"
+            aws ecr list-images --repository-name "$PROJECT_NAME" --region "$AWS_REGION" \
+              --query 'imageIds[*]' --output json | \
+              jq -c '.[]' | \
+              while read image; do
+                aws ecr batch-delete-image --repository-name "$PROJECT_NAME" --region "$AWS_REGION" --image-ids "$image"
+              done
+          fi
 
-          # Remove all videos from S3 bucket
-          aws s3 rm s3://$PROJECT_NAME --region $AWS_REGION --recursive
+          if aws s3api head-bucket --bucket "$PROJECT_NAME" --region "$AWS_REGION" > /dev/null 2>&1; then
+            echo "▶️ Limpando objetos do bucket S3: $PROJECT_NAME"
+            aws s3 rm s3://"$PROJECT_NAME" --region "$AWS_REGION" --recursive
+          fi
 
       - name: Terraform Apply or Destroy
         working-directory: terraform
         run: |
           if [ "${{ github.event.inputs.action }}" == "apply" ]; then
+            chmod +x scripts/prepare.sh
             terraform apply -input=false -auto-approve tfplan
           else
             terraform destroy -auto-approve
