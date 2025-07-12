@@ -23,6 +23,58 @@ Ferramenta serverless para conversão de vídeos usando FFmpeg em uma função A
 - Converter vídeo para `output_format` e `resolution` usando FFmpeg  
 - Enviar o arquivo convertido de volta ao S3  
 
+## Formatos Suportados
+
+O Lambda suporta conversão para os seguintes formatos de saída (extensões):  
+- MP4 (`.mp4`)  
+- MKV (`.mkv`)  
+- AVI (`.avi`)  
+- MOV (`.mov`)  
+- WEBM (`.webm`)  
+
+## Exemplo de Payload (Laravel)
+
+A seguir um exemplo de como enviar a mensagem para a fila SQS usando Laravel e o SDK da AWS:
+
+```php
+use Aws\Sqs\SqsClient;
+
+// Cria o cliente SQS
+$client = new SqsClient([
+    'region'      => env('AWS_REGION', 'us-east-1'),
+    'version'     => 'latest',
+    'credentials' => [
+        'key'    => env('AWS_ACCESS_KEY_ID'),
+        'secret' => env('AWS_SECRET_ACCESS_KEY'),
+    ],
+]);
+
+// Define o payload
+$payload = [
+    's3_input_url'  => 'https://lambda-python-ffmpeg.s3.us-east-1.amazonaws.com/sample.mp4',
+    'output_key'    => 'converted/sample_converted.mkv',
+    'output_format' => 'mkv',
+    'resolution'    => '640x360',
+];
+
+// Envia a mensagem para a fila
+$client->sendMessage([
+    'QueueUrl'    => env('SQS_QUEUE_URL'),
+    'MessageBody' => json_encode($payload),
+]);
+```
+
+Você também pode usar o Facade de Queue do Laravel se estiver configurando o driver SQS:
+
+```php
+use Illuminate\Support\Facades\Queue;
+
+Queue::connection('sqs')->pushRaw(
+    json_encode($payload),
+    env('SQS_QUEUE_NAME', 'lambda-python-ffmpeg-queue')
+);
+```
+
 ## Teste Local
 
 1. Suba o container Lambda com Docker Compose:  
