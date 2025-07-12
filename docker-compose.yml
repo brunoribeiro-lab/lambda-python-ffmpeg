@@ -1,0 +1,6 @@
+services:
+  lambda-test:
+    build: .
+    image: lambda-python-ffmpeg:test
+    volumes:
+      - ./:/var/task
