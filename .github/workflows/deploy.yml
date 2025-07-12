@@ -92,7 +92,11 @@ jobs:
       - name: Determine latest tag
         id: prev_tag
         run: |
-            PREVIOUS_TAG=$(git describe --tags --abbrev=0)
+            PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [[ -z "$PREVIOUS_TAG" ]]; then
+              echo "No previous tags found, using initial commit"
+              PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+            fi
             echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
 
       - name: Gather changelog entries
