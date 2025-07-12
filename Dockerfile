@@ -13,11 +13,11 @@ RUN pip install --upgrade pip wheel
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
-    | tar -xJ -C /tmp --strip-components=1 ffmpeg-*-static && \
-    mv /tmp/ffmpeg /usr/local/bin/ffmpeg && \
-    mv /tmp/ffprobe /usr/local/bin/ffprobe && \
-    rm -rf /tmp
+RUN curl -sSL https://raw.githubusercontent.com/brunoribeiro-lab/ffmpeg-7.0.2-amd64-static/main/ffmpeg \
+      -o /usr/local/bin/ffmpeg && \
+    curl -sSL https://raw.githubusercontent.com/brunoribeiro-lab/ffmpeg-7.0.2-amd64-static/main/ffprobe \
+      -o /usr/local/bin/ffprobe && \
+    chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
 
 COPY . ${LAMBDA_TASK_ROOT}/
 
