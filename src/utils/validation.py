@@ -43,7 +43,8 @@ def validate_event(event: dict) -> VideoParams:
         raise ValueError(
             f"Parâmetros obrigatórios ausentes ou vazios: {', '.join(missing)}")
 
-    extra = set(body.keys()) - set(required)
+    allowed = set(required + ['resolution'])
+    extra = set(body.keys()) - allowed
     if extra:
         raise ValueError(
             f"Parâmetros inesperados no payload: {', '.join(sorted(extra))}")
